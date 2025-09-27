@@ -1,5 +1,11 @@
-import React, { useState } from 'react';
-import { progressContainer, progressBar, bufferBar, thumbnailPreview, timeTooltip } from '../styles/progress';
+import React, { useState } from "react";
+import {
+  progressContainer,
+  progressBar,
+  bufferBar,
+  thumbnailPreview,
+  timeTooltip,
+} from "../styles/progress";
 
 /**
  * Video progress bar component with modern design
@@ -21,9 +27,11 @@ const ProgressBar = ({
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
     if (h > 0) {
-      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      return `${h}:${m.toString().padStart(2, "0")}:${s
+        .toString()
+        .padStart(2, "0")}`;
     }
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
   const handleMouseEnter = () => setIsHovering(true);
@@ -32,12 +40,13 @@ const ProgressBar = ({
     onMouseLeave(e);
   };
 
+  const currentTime = (progress / 100) * videoDuration;
+
   return (
     <div
       style={{
-        position: 'relative',
-        padding: '10px 0',
-        cursor: 'pointer',
+        position: "relative",
+        cursor: "pointer",
       }}
       onClick={onSeek}
       onMouseMove={onMouseMove}
@@ -62,33 +71,51 @@ const ProgressBar = ({
         />
       </div>
 
-      {/* Hover time tooltip */}
-      {isHovering && hoverTime !== null && (
-        <div
-          style={{
-            ...timeTooltip,
-            left: `${(hoverTime / videoDuration) * 100}%`,
-          }}
-        >
-          {formatTime(hoverTime)}
-        </div>
-      )}
+      {/* Time display */}
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between",
+        fontSize: "12px",
+        color: "#fff",
+        marginTop: "4px"
+      }}>
+        <span>{formatTime(currentTime)}</span>
+        <span>{formatTime(videoDuration)}</span>
+      </div>
 
-      {/* Thumbnail preview */}
-      {hoverThumb && (
-        <div
-          style={{
-            ...thumbnailPreview,
-            left: `${(hoverTime / videoDuration) * 100}%`,
-            width: hoverThumb.w,
-            height: hoverThumb.h,
-            backgroundImage: `url(${hoverThumb.url})`,
-            backgroundPosition: `-${hoverThumb.x}px -${hoverThumb.y}px`,
-            backgroundRepeat: 'no-repeat',
-            backgroundColor: '#000',
-          }}
-        />
-      )}
+      <div>
+        {/* Thumbnail preview */}
+        {hoverThumb && (
+          <div
+            style={{
+              ...thumbnailPreview,
+              left: `${(hoverTime / videoDuration) * 100}%`,
+              width: hoverThumb.w,
+              height: hoverThumb.h,
+              backgroundImage: `url(${hoverThumb.url})`,
+              backgroundPosition: `-${hoverThumb.x}px -${hoverThumb.y}px`,
+              backgroundRepeat: "no-repeat",
+              backgroundColor: "#000",
+            }}
+          />
+        )}
+
+        {/* Hover time tooltip */}
+        {isHovering && hoverTime !== null && (
+          <div
+            style={{
+              ...timeTooltip,
+              left: `${(hoverTime / videoDuration) * 100}%`,
+              bottom: "auto", // Remove bottom positioning
+              top: "100%", // Position below instead of above
+              marginBottom: 0, // Remove bottom margin
+              marginTop: "4px", // Add top margin instead
+            }}
+          >
+            {formatTime(hoverTime)}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
