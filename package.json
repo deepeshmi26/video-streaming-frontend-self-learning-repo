@@ -1,0 +1,12 @@
+{
+  "name": "hls-to-mp4-converter",
+  "version": "1.0.0",
+  "description": "Convert HLS streams to MP4 files",
+  "main": "converter.js",
+  "scripts": {
+    "convert": "node converter.js"
+  },
+  "dependencies": {
+    "fluent-ffmpeg": "^2.1.2"
+  }
+}
