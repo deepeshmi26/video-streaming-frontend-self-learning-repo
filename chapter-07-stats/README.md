@@ -1,55 +1,34 @@
-# Chapter 5- Thumbnail Previews on Hover
+# Chapter 7: Video Player Statistics Overlay
 
-In this section, we explored how platforms like YouTube and Netflix show preview thumbnails when hovering over the progress bar.
+This chapter demonstrates how to add a statistics overlay to a video player to display technical metrics about video playback. The stats overlay helps monitor video performance by showing key metrics like resolution, bitrate, and buffer status in real-time.
 
----
+## Key Features
 
-## 🔹 Options for Thumbnails
+- Real-time display of video statistics including:
+  - Current resolution
+  - Bitrate
+  - Buffer length
+  - Playback position
+  - Dropped frames
+  - Decoded frames
+  - Playback speed
 
-1. **Individual Images**
-   - One JPEG/PNG per interval (e.g., every 5s).
-   - ✅ Simple to generate, cacheable by CDN.
-   - ❌ Too many HTTP requests for long videos.
+- Tooltip explanations for each metric
+- Semi-transparent overlay that integrates with the player UI
+- Auto-updating stats every 500ms
+- HLS integration for bitrate monitoring
 
-2. **Single Sprite Sheet**
-   - All thumbnails packed into one large image.
-   - ✅ One HTTP request, CDN-friendly.
-   - ❌ Large upfront download, wasteful if user never scrubs.
+## Stats Overview
 
-3. **Segmented Sprite Sheets**
-   - Multiple smaller sprites (e.g., 10 min each), mapped via VTT/JSON.
-   - ✅ Efficient balance: only fetch what’s needed.
-   - ✅ CDN caches each sheet.
-   - ❌ Slight extra logic to pick the right sheet.
+- Resolution: Shows current video dimensions being rendered
+- Bitrate: Indicates streaming quality and bandwidth usage
+- Buffer: Displays how many seconds are preloaded
+- Current Time: Shows exact playback position
+- Dropped Frames: Helps identify performance issues
+- Decoded Frames: Shows successful frame processing
+- Playback Rate: Indicates current playback speed
 
-4. **HTTP Streaming (HLS/DASH Trick-Play)**
-   - Thumbnails or low-bitrate preview video packaged as segments with a manifest.
-   - ✅ Unified with streaming infra, supports adaptive preview quality.
-   - ❌ Complex infra, usually for large-scale OTT (Netflix, Prime).
+## Usage
 
-5. **Custom API (Base64 + JSON)**
-   - One API call returns all thumbnails for a given window.
-   - ✅ Flexible, single request.
-   - ❌ Payload ~33% larger, not CDN-cacheable, backend overhead.
+The StatsOverlay component is automatically included in the VideoPlayer and will appear in the bottom left corner. Users can hover over the info icon next to each stat to see an explanation of what that metric means.
 
----
-
-## 🔹 Tradeoffs
-
-| Approach               | Pros                                | Cons                                   | Best Use Case |
-|------------------------|-------------------------------------|----------------------------------------|---------------|
-| Individual Images      | Simple, cacheable                   | Too many requests                      | Prototypes, short clips |
-| Single Sprite Sheet    | One request, CDN-friendly           | Wasteful for long videos               | Short videos |
-| Segmented Sprite Sheets| Balanced, CDN works, efficient      | Needs VTT/JSON + selection logic       | YouTube-style scrubbing |
-| HTTP Streaming (Trick-Play)| Unified infra, adaptive quality | Complex packaging, OTT-only            | Netflix, Prime Video |
-| Custom API             | Flexible, single call               | Heavier, no CDN caching with base64    | Internal tools |
-
----
-
-## 🔹 Final Choice
-
-- **Short videos** → Single sprite sheet.  
-- **Long videos (real-world web)** → Segmented sprite sheets with VTT mapping (YouTube style).  
-- **OTT-scale platforms** → Trick-play videos packaged via HLS/DASH.  
-
-✅ For our project: **Segmented sprite sheets + VTT** is the most practical and scalable choice.
