@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import VideoPlayer from "../features/player/components/VideoPlayer";
 import { mockVideos } from "../mockData";
@@ -12,9 +12,11 @@ const PlayerPage = () => {
   const mockVideo = mockVideos.find((video) => video.id === parseInt(id));
   const src = mockVideo.src;
 
-  // Get any saved progress for this video from watch history
-  const savedEntry = history.find((v) => v.id === mockVideo.id);
-  const initialProgress = savedEntry?.progress ?? 0;
+  // Get initial progress once and memoize it
+  const initialProgress = useMemo(() => {
+    const savedEntry = history.find((v) => v.id === mockVideo.id);
+    return savedEntry?.progress ?? 0;
+  }, [mockVideo.id]); // Only depends on video ID, not history
 
   const onProgressUpdate = useCallback(
     (progress) => {
