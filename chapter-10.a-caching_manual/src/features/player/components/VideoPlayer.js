@@ -20,12 +20,14 @@ const CustomVideoPlayer = ({
   subtitles,
   thumbnailsVtt,
   onProgressUpdate,
+  initialProgress = 0,
 }) => {
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isControlsVisible, setIsControlsVisible] = useState(true);
   const controlsTimeoutRef = useRef(null);
+  const hasAppliedInitialSeekRef = useRef(false);
 
   // Initialize hooks
   const { levels, currentLevel, handleQualityChange, hlsInstance } = useHls({
@@ -35,7 +37,41 @@ const CustomVideoPlayer = ({
 
   const { progress, buffered, handleSeek } = useVideoProgress({
     videoRef,
+    initialProgressPercent: initialProgress,
   });
+
+  // Reset the one-time initial seek when source changes
+  useEffect(() => {
+    hasAppliedInitialSeekRef.current = false;
+  }, [src]);
+
+  // Seek to initial progress once metadata is ready (only once per src)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleLoaded = () => {
+      if (hasAppliedInitialSeekRef.current) return;
+      if (!video.duration || isNaN(video.duration)) return;
+      const clamped = Math.max(0, Math.min(100, initialProgress));
+      const time = (clamped / 100) * video.duration;
+      if (!Number.isNaN(time) && Number.isFinite(time)) {
+        video.currentTime = time;
+      }
+      hasAppliedInitialSeekRef.current = true;
+    };
+
+    // If metadata already loaded, seek immediately; otherwise wait
+    if (video.readyState >= 1) {
+      handleLoaded();
+    } else {
+      video.addEventListener("loadedmetadata", handleLoaded, { once: true });
+    }
+
+    return () => {
+      video.removeEventListener("loadedmetadata", handleLoaded);
+    };
+  }, [src, initialProgress, videoRef]);
 
   useEffect(() => {
     onProgressUpdate(progress);
