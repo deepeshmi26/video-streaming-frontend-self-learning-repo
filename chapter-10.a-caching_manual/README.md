@@ -1,18 +1,31 @@
-Chapter 10.a — Manual Caching Strategies
+# 🧩 Chapter 10.a — Manual Data Fetching & Caching
 
-Goal: Understand and implement caching logic without any library.
+## Features Implemented
+- **Cache Management**
+  - In-memory cache using Map
+  - LocalStorage persistence
+  - Cache expiration & cleanup
+  - Cache key generation
+- **Request Handling** 
+  - Request deduplication
+  - Abort controller integration
+  - Error handling
+- **React Hooks**
+  - `useQuery` - Data fetching with caching
+  - `useMutation` - Data mutations
+  - Background refetch strategies
+- **Event System**
+  - Query invalidation events
+  - Subscriber notifications
 
-You’ll implement:
-	•	In-memory caching (JS object or Map)
-	•	LocalStorage caching (with expiration)
-	•	IndexedDB caching (for heavier data — optional)
-	•	Manual invalidation and re-fetching logic
 
-Core focus areas:
-	•	When to store data
-	•	How to expire cache
-	•	Detect stale data
-	•	Manually revalidate (e.g., via timestamp or version)
 
-Tech stack:
-React + Axios (no React Query or RTK)
+## Missing Features Covered Well by React Query
+
+- Devtools for inspecting queries and cache state
+- Automatic garbage collection with configurable cache policies
+- Retry strategies and offline mode handling
+- Infinite scroll and pagination support
+- Optimistic updates with automatic rollback
+- Prefetching data for routes
+- Server-side rendering support

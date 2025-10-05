@@ -1,144 +1,234 @@
-import { useState, useEffect } from "react";
+// src/utils/fetchWrapper.js
+import { useState, useEffect, useRef } from "react";
 
-// --- In-memory cache ---
+/* -------------------------------------------------------------------------- */
+/*                             Cache Configuration                            */
+/* -------------------------------------------------------------------------- */
+
 const IN_MEMORY_CACHE = new Map();
+const IN_FLIGHT_REQUESTS = new Map();
 const CACHE_EXPIRATION_TIME = 60 * 1000; // 1 minute
+const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 mins
 
-// Generate unique cache key
+/* -------------------------------------------------------------------------- */
+/*                               Event Emitter                                */
+/* -------------------------------------------------------------------------- */
+const QueryEventBus = {
+  listeners: new Map(),
+
+  subscribe(key, callback) {
+    if (!this.listeners.has(key)) this.listeners.set(key, new Set());
+    this.listeners.get(key).add(callback);
+    return () => this.listeners.get(key)?.delete(callback);
+  },
+
+  emit(key) {
+    if (this.listeners.has(key)) {
+      for (const cb of this.listeners.get(key)) cb();
+    }
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/*                              Cache Management                              */
+/* -------------------------------------------------------------------------- */
 const cacheKeyGenerator = (url, options) => `${url}-${JSON.stringify(options)}`;
 
-/**
- * Fetch wrapper with optional caching and cancellation
- */
+const CacheManager = {
+  get(cacheKey) {
+    const now = Date.now();
+    const entry = IN_MEMORY_CACHE.get(cacheKey);
+    if (entry && now - entry.timestamp < entry.ttl) {
+      return entry.data;
+    }
+    this.invalidate(cacheKey);
+    return null;
+  },
+
+  set(cacheKey, data, ttl = CACHE_EXPIRATION_TIME) {
+    const now = Date.now();
+    IN_MEMORY_CACHE.set(cacheKey, { data, timestamp: now, ttl });
+    localStorage.setItem(
+      cacheKey,
+      JSON.stringify({ data, timestamp: now, ttl })
+    );
+  },
+
+  invalidate(cacheKey) {
+    IN_MEMORY_CACHE.delete(cacheKey);
+    localStorage.removeItem(cacheKey);
+  },
+
+  cleanup() {
+    const now = Date.now();
+    for (const [key, value] of IN_MEMORY_CACHE.entries()) {
+      if (now - value.timestamp > value.ttl) {
+        IN_MEMORY_CACHE.delete(key);
+        localStorage.removeItem(key);
+      }
+    }
+  },
+};
+
+// run cleanup every few minutes
+setInterval(() => CacheManager.cleanup(), CLEANUP_INTERVAL);
+
+/* -------------------------------------------------------------------------- */
+/*                                Fetch Wrapper                               */
+/* -------------------------------------------------------------------------- */
 export const fetchWrapper = async (
   url,
   options = {},
-  { cache = false, signal, invalidateCache = false } = {}
+  { cache = true, ttl = CACHE_EXPIRATION_TIME, forceRefresh = false } = {}
 ) => {
-  const now = Date.now();
   const cacheKey = cacheKeyGenerator(url, options);
+  const now = Date.now();
 
-  // 1️⃣ Check in-memory cache
-  if (cache && IN_MEMORY_CACHE.has(cacheKey)) {
-    const cached = IN_MEMORY_CACHE.get(cacheKey);
-    if (now - cached.timestamp < CACHE_EXPIRATION_TIME) {
-      return cached.data;
-    }
-    IN_MEMORY_CACHE.delete(cacheKey);
-  }
+  // 1️⃣ Return from cache if valid and not forced
+  if (cache && !forceRefresh) {
+    const cached = CacheManager.get(cacheKey);
+    if (cached) return cached;
 
-  // 2️⃣ Check localStorage cache
-  if (cache && localStorage.getItem(cacheKey)) {
-    try {
-      const cached = JSON.parse(localStorage.getItem(cacheKey));
-      if (now - cached.timestamp < CACHE_EXPIRATION_TIME) {
-        IN_MEMORY_CACHE.set(cacheKey, cached);
-        return cached.data;
-      }
-      localStorage.removeItem(cacheKey);
-    } catch {
-      localStorage.removeItem(cacheKey);
-    }
-  }
-
-  // 3️⃣ Actual fetch
-  try {
-    const response = await fetch(url, { ...options, signal });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`HTTP ${response.status}: ${text}`);
-    }
-
-    const data = await response.json();
-
-    if (cache && !invalidateCache) {
-      const entry = { data, timestamp: now };
-      IN_MEMORY_CACHE.set(cacheKey, entry);
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(entry));
-      } catch {
-        console.warn("localStorage full, skipping cache");
+    const local = localStorage.getItem(cacheKey);
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (now - parsed.timestamp < parsed.ttl) {
+        CacheManager.set(cacheKey, parsed.data, parsed.ttl);
+        return parsed.data;
       }
     }
-
-    return data;
-  } catch (err) {
-    if (err.name === "AbortError") {
-      console.log("Fetch aborted:", url);
-      return;
-    }
-    throw err;
   }
+
+  // 2️⃣ Deduplication — share ongoing promise
+  if (IN_FLIGHT_REQUESTS.has(cacheKey)) {
+    return IN_FLIGHT_REQUESTS.get(cacheKey);
+  }
+
+  // 3️⃣ Perform network call
+  const controller = new AbortController();
+  const fetchPromise = fetch(url, { ...options, signal: controller.signal })
+    .then(async (res) => {
+      if (!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      if (cache) CacheManager.set(cacheKey, data, ttl);
+      return data;
+    })
+    .finally(() => IN_FLIGHT_REQUESTS.delete(cacheKey));
+
+  IN_FLIGHT_REQUESTS.set(cacheKey, fetchPromise);
+  return fetchPromise;
 };
 
-/**
- * useQuery – handles GET (or cached) requests
- */
-export const useQuery = (url, options = {}, config = {}) => {
+/* -------------------------------------------------------------------------- */
+/*                                useQuery Hook                               */
+/* -------------------------------------------------------------------------- */
+export const useQuery = (
+  url,
+  options = {},
+  {
+    cache = true,
+    ttl,
+    forceRefresh = false,
+    staleTime = 30000,
+    backgroundRefetch = "once", // "once" | "interval"
+  } = {}
+) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const mountedRef = useRef(true);
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const cacheKey = cacheKeyGenerator(url, options);
 
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const result = await fetchWrapper(url, options, {
-          cache: config.cache ?? true,
-          signal: controller.signal,
-        });
-        if (result !== undefined) setData(result);
-      } catch (err) {
-        if (err.name !== "AbortError") setError(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-
-    // ✅ Abort ongoing request on unmount or re-run
-    return () => controller.abort();
-  }, [url, JSON.stringify(options)]);
-
-  const refetch = () => {
-    const controller = new AbortController();
+  const fetchData = async (manualRefresh = false) => {
     setLoading(true);
     setError(null);
-    fetchWrapper(url, options, {
-      cache: false,
-      signal: controller.signal,
-      invalidateCache: true,
-    })
-      .then((r) => r && setData(r))
-      .catch((err) => {
-        if (err.name !== "AbortError") setError(err);
-      })
-      .finally(() => setLoading(false));
+    try {
+      const result = await fetchWrapper(url, options, {
+        cache,
+        ttl,
+        forceRefresh: manualRefresh,
+      });
+      if (mountedRef.current) setData(result);
+
+      // 4️⃣ Background Refetch
+      if (cache && staleTime) {
+        if (backgroundRefetch === "once") {
+          setTimeout(() => {
+            fetchWrapper(url, options, {
+              cache: true,
+              forceRefresh: true,
+            }).then((updated) => {
+              if (
+                mountedRef.current &&
+                JSON.stringify(updated) !== JSON.stringify(result)
+              ) {
+                setData(updated);
+              }
+            });
+          }, staleTime);
+        } else if (backgroundRefetch === "interval") {
+          const interval = setInterval(async () => {
+            const updated = await fetchWrapper(url, options, {
+              cache: true,
+              forceRefresh: true,
+            });
+            if (
+              mountedRef.current &&
+              JSON.stringify(updated) !== JSON.stringify(data)
+            ) {
+              setData(updated);
+            }
+          }, staleTime);
+          return () => clearInterval(interval);
+        }
+      }
+    } catch (err) {
+      if (mountedRef.current) setError(err);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
   };
 
-  return { data, loading, error, refetch };
+  useEffect(() => {
+    mountedRef.current = true;
+    fetchData();
+
+    // Subscribe for invalidation events
+    const unsubscribe = QueryEventBus.subscribe(cacheKey, () => {
+      fetchData(true);
+    });
+
+    return () => {
+      mountedRef.current = false;
+      unsubscribe();
+    };
+  }, [url, JSON.stringify(options), forceRefresh]);
+
+  return {
+    data,
+    loading,
+    error,
+    refetch: () => fetchData(true),
+  };
 };
 
-/**
- * useMutation – handles POST/PUT/DELETE requests
- */
+/* -------------------------------------------------------------------------- */
+/*                               useMutation Hook                             */
+/* -------------------------------------------------------------------------- */
 export const useMutation = (url, options = {}) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [controller, setController] = useState(null); // Track AbortController
+  const controllerRef = useRef(null);
 
   const mutate = async (body, { cache = false } = {}) => {
-    const abortController = new AbortController();
-    setController(abortController);
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetchWrapper(
+      const result = await fetchWrapper(
         url,
         {
           ...options,
@@ -148,26 +238,31 @@ export const useMutation = (url, options = {}) => {
             ...(options.headers || {}),
           },
           body: JSON.stringify(body),
+          signal: controller.signal,
         },
-        { cache, signal: abortController.signal }
+        { cache, forceRefresh: true }
       );
-
-      return response;
+      return result;
     } catch (err) {
       if (err.name !== "AbortError") setError(err);
     } finally {
       setLoading(false);
-      setController(null);
+      controllerRef.current = null;
     }
   };
 
   const abort = () => {
-    if (controller) {
-      controller.abort();
-      setController(null);
-      setLoading(false);
-    }
+    if (controllerRef.current) controllerRef.current.abort();
   };
 
   return { mutate, loading, error, abort };
+};
+
+/* -------------------------------------------------------------------------- */
+/*                            Cache Invalidation API                          */
+/* -------------------------------------------------------------------------- */
+export const invalidateCache = (url, options = {}) => {
+  const cacheKey = cacheKeyGenerator(url, options);
+  CacheManager.invalidate(cacheKey);
+  QueryEventBus.emit(cacheKey); // Notify subscribers to refetch
 };
