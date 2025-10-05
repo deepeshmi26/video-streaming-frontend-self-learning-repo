@@ -1,34 +1,80 @@
-# Chapter 7: Video Player Statistics Overlay
+# 🎬 Chapter 07 — Stats & Scalability
 
-This chapter demonstrates how to add a statistics overlay to a video player to display technical metrics about video playback. The stats overlay helps monitor video performance by showing key metrics like resolution, bitrate, and buffer status in real-time.
+This chapter explains **how a video player measures its performance** and **adapts to network conditions** to keep playback smooth.
 
-## Key Features
+---
 
-- Real-time display of video statistics including:
-  - Current resolution
-  - Bitrate
-  - Buffer length
-  - Playback position
-  - Dropped frames
-  - Decoded frames
-  - Playback speed
+## ❓What did we build?
 
-- Tooltip explanations for each metric
-- Semi-transparent overlay that integrates with the player UI
-- Auto-updating stats every 500ms
-- HLS integration for bitrate monitoring
+We added a `useQoEMetrics` hook that tracks:
+- Current quality (Auto, 720p, 1080p)
+- Buffer health (how much video is preloaded)
+- Bitrate and download speed
+- Rebuffer events (when playback pauses)
+- Latency and errors
 
-## Stats Overview
+These metrics are shown in a small “Stats for nerds” overlay.
 
-- Resolution: Shows current video dimensions being rendered
-- Bitrate: Indicates streaming quality and bandwidth usage
-- Buffer: Displays how many seconds are preloaded
-- Current Time: Shows exact playback position
-- Dropped Frames: Helps identify performance issues
-- Decoded Frames: Shows successful frame processing
-- Playback Rate: Indicates current playback speed
+---
 
-## Usage
+## ❓Why do we need these stats?
 
-The StatsOverlay component is automatically included in the VideoPlayer and will appear in the bottom left corner. Users can hover over the info icon next to each stat to see an explanation of what that metric means.
+Because the player should **adjust itself** based on network and device conditions.  
+If the connection slows down → reduce quality.  
+If the connection improves → increase quality.
 
+Without this, the user will face buffering or wasted bandwidth.
+
+---
+
+## ❓What’s the difference between Bitrate, Download Speed, and Throughput?
+
+| Term | Meaning | Easy Example |
+|------|----------|---------------|
+| **Bitrate** | How heavy 1 second of video is (set by the encoder). | 720p needs ~2 Mbps |
+| **Download Speed** | How fast we actually fetched the video. | Current network = 4 Mbps |
+| **Throughput** | Average of recent download speeds (used for predictions). | Usually smoothed speed |
+
+👉 If **throughput > bitrate** → player can go higher quality.  
+👉 If **throughput < bitrate** → player must drop quality.
+
+---
+
+## ❓What is Buffer Health?
+bufferHealth = bufferedEnd - currentTime
+
+The amount of video already downloaded and ready to play.  
+
+More buffer = safer playback.  
+Less buffer = risk of rebuffering.
+
+---
+
+## ❓What is QoE?
+
+**QoE (Quality of Experience)** means how smooth playback *feels* to the viewer —  
+startup delay, no stutters, good resolution, etc.  
+It’s different from **QoS (Quality of Service)** which is about network performance.
+
+---
+
+## ❓How does adaptive streaming (ABR) work?
+
+1. Measure download speed per fragment.  
+2. Average it → throughput.  
+3. Compare throughput vs available bitrates.  
+4. Switch up or down accordingly.
+
+This is how HLS and DASH deliver videos that “just work” across all networks.
+
+---
+
+## ✅ Summary
+
+In this chapter we:
+- Learned what metrics matter for playback.  
+- Understood how bitrate, download speed and buffer are connected.  
+- Built a small metrics tracker using `hls.js` events.  
+- Made our player adaptive and scalable.
+
+Next: we’ll explore **DRM (Protected Content)** and secure playback.

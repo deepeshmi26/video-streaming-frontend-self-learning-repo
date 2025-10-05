@@ -1,16 +1,16 @@
 import React, { useRef, useState } from "react";
-import { colors, borderRadius, shadows } from "./styles/theme";
+import { colors, borderRadius, shadows } from "../styles/theme";
 
-import useHls from "./hooks/useHls";
-import useVideoProgress from "./hooks/useVideoProgress";
-import useSubtitles from "./hooks/useSubtitles";
-import useThumbnails from "./hooks/useThumbnails";
-import useQoEMetrics from "./hooks/useQoEMetrics";
+import useHls from "../hooks/useHls";
+import useVideoProgress from "../hooks/useVideoProgress";
+import useSubtitles from "../hooks/useSubtitles";
+import useThumbnails from "../hooks/useThumbnails";
+import useQoEMetrics from "../hooks/useQoEMetrics";
 
-import VideoControls from "./components/VideoControls";
-import ProgressBar from "./components/ProgressBar";
-import StatsOverlay from "./components/StatsOverlay";
-import QoEStats from "./components/QoEStats";
+import VideoControls from "./VideoControls";
+import ProgressBar from "./ProgressBar";
+import StatsOverlay from "./StatsOverlay";
+import QoEStats from "./QoEStats";
 
 /**
  * Custom video player component with modern UI
